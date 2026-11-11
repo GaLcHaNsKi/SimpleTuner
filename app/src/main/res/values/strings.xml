@@ -1,0 +1,28 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="app_name">TUNER</string>
+    <string name="guitar">Гитара</string>
+    <string name="bass">Бас</string>
+    <string name="mic_active">МИКРОФОН АКТИВЕН</string>
+    <string name="mic_inactive">МИКРОФОН ВЫКЛЮЧЕН</string>
+    <string name="play_string">Сыграй струну</string>
+    <string name="uncertain">Не удаётся определить струну</string>
+    <string name="starting">Включаем микрофон…</string>
+    <string name="audio_error">Не удалось включить микрофон</string>
+    <string name="retry">Повторить</string>
+    <string name="permission">Для настройки нужен доступ к микрофону</string>
+    <string name="permission_settings">Разреши доступ к микрофону в настройках Android</string>
+    <string name="allow">Разрешить микрофон</string>
+    <string name="open_settings">Открыть настройки</string>
+    <string name="tighten">Подтяни струну</string>
+    <string name="loosen">Ослабь струну</string>
+    <string name="tuned">Настроено</string>
+    <string name="stabilizing">Слушаем струну…</string>
+    <string name="frequency_format">%1$.1f Hz</string>
+    <string name="cents_format" tools:ignore="PluralsCandidate">%1$+d cents</string>
+    <string name="zero_cents">0 cents</string>
+    <string name="standard_tuning">СТАНДАРТНЫЙ СТРОЙ</string>
+    <string name="reference">A4 = 440 Hz</string>
+    <string name="selected_string">Струна %1$d, %2$s%3$d</string>
+    <string name="no_note">—</string>
+    <string name="scale_accessibility">Шкала отклонения от минус 50 до плюс 50 центов</string>
+</resources>
