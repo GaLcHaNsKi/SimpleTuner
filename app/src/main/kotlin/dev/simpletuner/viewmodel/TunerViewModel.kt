@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.simpletuner.audio.AudioCapture
 import dev.simpletuner.domain.InstrumentMode
+import dev.simpletuner.domain.TuningPrecision
 import dev.simpletuner.dsp.TrackedPitch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,14 +29,18 @@ sealed interface TunerStatus {
     data object AudioUnavailable : TunerStatus
 }
 
-data class TunerUiState(val mode: InstrumentMode, val status: TunerStatus)
+data class TunerUiState(val mode: InstrumentMode, val precision: TuningPrecision, val status: TunerStatus)
 
 class TunerViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = application.getSharedPreferences("tuner", 0)
     private val initialMode = runCatching {
         InstrumentMode.valueOf(preferences.getString("mode", "GUITAR") ?: "GUITAR")
     }.getOrDefault(InstrumentMode.GUITAR)
-    private val mutableState = MutableStateFlow(TunerUiState(initialMode, TunerStatus.PermissionRequired(false)))
+    private val initialPrecision = if (preferences.getBoolean("precise", false)) TuningPrecision.PRECISE
+        else TuningPrecision.STANDARD
+    private val mutableState = MutableStateFlow(
+        TunerUiState(initialMode, initialPrecision, TunerStatus.PermissionRequired(false)),
+    )
     val state: StateFlow<TunerUiState> = mutableState.asStateFlow()
     private val capture = AudioCapture(application)
     private val captureMutex = Mutex()
@@ -43,11 +48,22 @@ class TunerViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile private var generation = 0
 
     fun selectMode(mode: InstrumentMode) {
-        if (state.value.mode == mode) return
+        select(mode, state.value.precision)
+    }
+
+    fun selectPrecision(precision: TuningPrecision) {
+        select(state.value.mode, precision)
+    }
+
+    private fun select(mode: InstrumentMode, precision: TuningPrecision) {
+        if (state.value.mode == mode && state.value.precision == precision) return
         val wasCapturing = captureJob?.isActive == true
         if (wasCapturing) stop()
-        preferences.edit { putString("mode", mode.name) }
-        mutableState.update { it.copy(mode = mode, status = when (it.status) {
+        preferences.edit {
+            putString("mode", mode.name)
+            putBoolean("precise", precision == TuningPrecision.PRECISE)
+        }
+        mutableState.update { it.copy(mode = mode, precision = precision, status = when (it.status) {
             is TunerStatus.Tracking, TunerStatus.Uncertain -> TunerStatus.Listening
             else -> it.status
         }) }
@@ -62,14 +78,15 @@ class TunerViewModel(application: Application) : AndroidViewModel(application) {
     fun start() {
         if (captureJob?.isActive == true) return
         val thisGeneration = ++generation
+        val settings = state.value
         mutableState.update { it.copy(status = TunerStatus.Starting) }
         captureJob = viewModelScope.launch {
             try {
                 captureMutex.withLock {
                     withContext(Dispatchers.IO) {
-                        capture.run(mode = { state.value.mode }) { capturedMode, pitch ->
+                        capture.run(settings.mode, settings.precision) { pitch ->
                             mutableState.update { old ->
-                                if (thisGeneration != generation || old.mode != capturedMode) old else old.copy(status = when (pitch) {
+                                if (thisGeneration != generation) old else old.copy(status = when (pitch) {
                                     TrackedPitch.Listening -> TunerStatus.Listening
                                     TrackedPitch.Uncertain -> TunerStatus.Uncertain
                                     is TrackedPitch.Tracking -> TunerStatus.Tracking(pitch)

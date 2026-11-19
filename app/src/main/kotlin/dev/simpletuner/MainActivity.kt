@@ -34,7 +34,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by model.state.collectAsStateWithLifecycle()
             TunerTheme {
-                TunerScreen(state, model::selectMode, ::requestMicrophone, ::openSettings, model::start)
+                TunerScreen(state, model::selectMode, model::selectPrecision, ::requestMicrophone,
+                    ::openSettings, model::start)
             }
         }
     }

@@ -2,6 +2,8 @@
     <string name="app_name">TUNER</string>
     <string name="guitar">Гитара</string>
     <string name="bass">Бас</string>
+    <string name="standard_mode">Обычный</string>
+    <string name="precise_mode">Точный</string>
     <string name="mic_active">МИКРОФОН АКТИВЕН</string>
     <string name="mic_inactive">МИКРОФОН ВЫКЛЮЧЕН</string>
     <string name="play_string">Сыграй струну</string>
@@ -25,4 +27,5 @@
     <string name="selected_string">Струна %1$d, %2$s%3$d</string>
     <string name="no_note">—</string>
     <string name="scale_accessibility">Шкала отклонения от минус 50 до плюс 50 центов</string>
+    <string name="standard_scale_accessibility">Шкала от минус 40 до плюс 40, один шаг равен 10 центам</string>
 </resources>

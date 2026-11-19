@@ -2,6 +2,7 @@ package dev.simpletuner.dsp
 
 import dev.simpletuner.domain.InstrumentMode
 import dev.simpletuner.domain.StringMatch
+import dev.simpletuner.domain.TuningPrecision
 import dev.simpletuner.domain.centsBetween
 import dev.simpletuner.domain.nearestString
 import kotlin.math.abs
@@ -13,7 +14,7 @@ sealed interface TrackedPitch {
 }
 
 /** Debounces candidate changes independently of the UI animation. */
-class PitchTracker {
+class PitchTracker(private val precision: TuningPrecision = TuningPrecision.PRECISE) {
     private var current: StringMatch? = null
     private var pendingNumber: Int? = null
     private var pendingCount = 0
@@ -39,7 +40,7 @@ class PitchTracker {
             return if (result is PitchResult.Silence) TrackedPitch.Listening else TrackedPitch.Uncertain
         }
         val candidate = nearestString(result.frequencyHz, mode)
-        if (candidate == null || abs(candidate.cents) > 150) {
+        if (candidate == null || abs(candidate.cents) > precision.maxMatchCents) {
             pendingNumber = null
             pendingCount = 0
             validCount = 0
@@ -50,7 +51,9 @@ class PitchTracker {
         val previous = current
         if (previous == null || previous.string != candidate.string) {
             val oldDistance = previous?.let { abs(centsBetween(result.frequencyHz, it.string.frequencyHz)) }
-            if (previous != null && oldDistance != null && abs(candidate.cents) + 20 >= oldDistance) {
+            if (precision.switchMarginCents > 0 && oldDistance != null &&
+                abs(candidate.cents) + precision.switchMarginCents >= oldDistance
+            ) {
                 return TrackedPitch.Uncertain
             }
             if (pendingNumber == candidate.string.number) pendingCount++ else {
@@ -67,14 +70,15 @@ class PitchTracker {
             pendingNumber = null
             pendingCount = 0
         }
-        if (recent.size == 3) recent.removeFirst()
+        if (recent.size == precision.medianSize) recent.removeFirst()
         recent.addLast(result.frequencyHz)
         validCount++
         val median = recent.sorted()[recent.size / 2]
         val match = StringMatch(candidate.string, centsBetween(median, candidate.string.frequencyHz))
         current = match
         // Require the latest raw sample as well, so stale median cannot claim tuning.
-        val stable = validCount >= 3 && abs(match.cents) <= 3 && abs(candidate.cents) <= 3
+        val stable = validCount >= 3 && abs(match.cents) <= precision.tunedCents &&
+            abs(candidate.cents) <= precision.tunedCents
         return TrackedPitch.Tracking(median, match, stable)
     }
 }

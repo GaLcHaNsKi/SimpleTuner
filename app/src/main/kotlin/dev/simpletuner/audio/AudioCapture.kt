@@ -12,6 +12,7 @@ import android.media.audiofx.NoiseSuppressor
 import android.os.Build
 import android.os.SystemClock
 import dev.simpletuner.domain.InstrumentMode
+import dev.simpletuner.domain.TuningPrecision
 import dev.simpletuner.dsp.PitchTracker
 import dev.simpletuner.dsp.TrackedPitch
 import dev.simpletuner.dsp.YinPitchDetector
@@ -21,7 +22,7 @@ import kotlinx.coroutines.isActive
 class AudioCapture(private val context: Context) {
     /** Called from an IO dispatcher after RECORD_AUDIO has been granted. */
     @SuppressLint("MissingPermission")
-    suspend fun run(mode: () -> InstrumentMode, onUpdate: (InstrumentMode, TrackedPitch) -> Unit) {
+    suspend fun run(mode: InstrumentMode, precision: TuningPrecision, onUpdate: (TrackedPitch) -> Unit) {
         val manager = context.getSystemService(AudioManager::class.java)
         val unprocessed = manager.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
         val sources = if (unprocessed) listOf(MediaRecorder.AudioSource.UNPROCESSED, MediaRecorder.AudioSource.MIC)
@@ -30,7 +31,7 @@ class AudioCapture(private val context: Context) {
         for (source in sources) for (rate in listOf(48000, 44100)) {
             if (!currentCoroutineContext().isActive) return
             try {
-                capture(source, rate, mode, onUpdate)
+                capture(source, rate, mode, precision, onUpdate)
                 return
             } catch (error: SecurityException) {
                 throw error
@@ -42,8 +43,8 @@ class AudioCapture(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    private suspend fun capture(source: Int, rate: Int, mode: () -> InstrumentMode,
-                                onUpdate: (InstrumentMode, TrackedPitch) -> Unit) {
+    private suspend fun capture(source: Int, rate: Int, mode: InstrumentMode,
+                                precision: TuningPrecision, onUpdate: (TrackedPitch) -> Unit) {
         val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(minBuffer > 0) { "Unsupported sample rate" }
         val recorder = AudioRecord(source, rate, AudioFormat.CHANNEL_IN_MONO,
@@ -60,12 +61,11 @@ class AudioCapture(private val context: Context) {
             recorder.startRecording()
             check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Cannot start microphone" }
             val detector = YinPitchDetector(rate)
-            val tracker = PitchTracker()
+            val tracker = PitchTracker(precision)
             val window = ShortArray(8192)
             val block = ShortArray(2048)
             var filled = 0
-            var previousMode = mode()
-            onUpdate(previousMode, TrackedPitch.Listening)
+            onUpdate(TrackedPitch.Listening)
             while (currentCoroutineContext().isActive) {
                 val read = recorder.read(block, 0, block.size, AudioRecord.READ_BLOCKING)
                 check(read > 0) { "AudioRecord read failed: $read" }
@@ -79,12 +79,7 @@ class AudioCapture(private val context: Context) {
                     filled += count
                     offset += count
                     if (filled == window.size) {
-                        val selectedMode = mode()
-                        if (selectedMode != previousMode) {
-                            tracker.reset()
-                            previousMode = selectedMode
-                        }
-                        onUpdate(selectedMode, tracker.update(detector.detect(window), selectedMode, SystemClock.elapsedRealtime()))
+                        onUpdate(tracker.update(detector.detect(window), mode, SystemClock.elapsedRealtime()))
                         window.copyInto(window, 0, block.size, window.size)
                         filled -= block.size
                     }
